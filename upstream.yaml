@@ -1,0 +1,20 @@
+schema_version: "vyges-upstream-v1"
+upstream:
+  type: "monorepo"
+  source: https://github.com/google-coral/coralnpu
+  path: hdl/verilog/rvv
+  commit: main
+  extracted_at: "2026-03-27T20:52:56Z"
+import:
+  rtl:
+    - path: "design"
+      map_to: "rtl/design"
+    - path: "common"
+      map_to: "rtl/common"
+    - path: "inc"
+      map_to: "rtl/inc"
+  license:
+    - path: "Apache-2.0"
+license:
+  spdx: Apache-2.0
+  file: LICENSE

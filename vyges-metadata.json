@@ -1,0 +1,118 @@
+{
+  "$schema": "https://vyges.com/schema/v1/vyges-metadata.schema.json",
+  "x-version": "1.0.0",
+  "name": "coralnpu-rvv-core",
+  "version": "0.1.0",
+  "description": "RISC-V Vector (RVV 1.0) execution engine implementing Zve32x integer vector extension with optional Zve32f floating-point support. Configurable VLEN (128/256/512/1024-bit), multi-lane dispatch (4 lanes default), out-of-order execution with reorder buffer. 2 ALU, 2 MUL, 1 DIV, 1 permutation/reduction, 2 LSU, and optional 2 FMA units. From Google CoralNPU project.",
+  "license": "Apache-2.0",
+  "maturity": "rtl_verified",
+  "target": ["asic", "fpga"],
+  "design_type": ["digital"],
+  "created": "2026-03-27T20:52:56Z",
+  "updated": "2026-03-27T20:52:56Z",
+  "source": {
+    "type": "git",
+    "url": "https://github.com/google-coral/coralnpu",
+    "commit": "main",
+    "ip_path": "hdl/verilog/rvv",
+    "private": false,
+    "containsEncryptedPayload": false,
+    "indexing": true
+  },
+  "maintainers": [{"name": "Vyges", "email": "team@vyges.com", "url": "https://vyges.com", "github": "vyges"}],
+  "interfaces": [
+    {"type": "instruction", "direction": "input", "port": "instruction", "width": 32, "description": "Multi-lane instruction input (N lanes, default 4) with validity signals."},
+    {"type": "register", "direction": "both", "port": "scalar_reg", "width": 32, "description": "Scalar register file read (2*N ports) and write (N ports) interface."},
+    {"type": "register", "direction": "both", "port": "fp_reg", "width": 32, "description": "Floating-point register read (N ports) and write interface (optional)."},
+    {"type": "lsu", "direction": "both", "port": "lsu", "description": "2 bidirectional LSU connections: vector register index/address, VRF read/write, mask (v0) interface."},
+    {"type": "csr", "direction": "both", "port": "rvv_csr", "description": "Vector CSR interface: vstart, vxrm, vxsat input; config state output."},
+    {"type": "retire", "direction": "output", "port": "rob2rt", "description": "4 ROB-to-retire write ports per lane with write address, data, type."},
+    {"type": "clock", "direction": "input", "port": "clk", "description": "System clock."},
+    {"type": "reset", "direction": "input", "port": "rst_n", "polarity": "active_low", "description": "Asynchronous active-low reset."}
+  ],
+  "parameters": [
+    {"name": "N", "type": "int", "default": 4, "description": "Number of instruction lanes (scalar core issue width)."},
+    {"name": "CMD_BUFFER_MAX_CAPACITY", "type": "int", "default": 16, "description": "Command buffer maximum capacity."},
+    {"name": "VLEN", "type": "enum", "default": "VLEN_128", "description": "Vector register length: VLEN_128, VLEN_256, VLEN_512, VLEN_1024."},
+    {"name": "ZVE32F_ON", "type": "define", "default": "disabled", "description": "Enable Zve32f floating-point vector extension (compile-time)."},
+    {"name": "DISPATCH3", "type": "define", "default": "enabled", "description": "3-decode/2-dispatch pipeline (vs DISPATCH2 alternative)."}
+  ],
+  "performance": {
+    "isa": "RISC-V Vector Extension 1.0",
+    "base_extension": "Zve32x (32-bit integer vector)",
+    "optional_extension": "Zve32f (32-bit FP vector)",
+    "vlen_options": [128, 256, 512, 1024],
+    "sew_options": [8, 16, 32, 64],
+    "lmul_options": ["1/8", "1/4", "1/2", "1", "2", "4", "8"],
+    "dispatch_width": "3 decode / 2 dispatch (DISPATCH3 mode)",
+    "execution_units": {
+      "alu": 2,
+      "mul": 2,
+      "div": 1,
+      "pmt_rdt": 1,
+      "lsu": 2,
+      "fma": "2 (optional, Zve32f)"
+    },
+    "rob_depth": 8,
+    "vector_registers": 32
+  },
+  "architecture": {
+    "type": "coprocessor",
+    "isa": "RISC-V Vector Extension 1.0 (Zve32x + optional Zve32f)",
+    "features": [
+      "Full RVV 1.0 integer vector support (Zve32x)",
+      "Optional floating-point vector (Zve32f with 2 FMA units)",
+      "Configurable VLEN: 128, 256, 512, or 1024 bits",
+      "SEW support: 8, 16, 32, 64-bit element widths",
+      "LMUL register grouping: 1/8 through 8",
+      "Multi-lane dispatch (4 lanes default)",
+      "Out-of-order execution with 8-entry reorder buffer",
+      "2 ALU units (add/sub/logic/shift/compare/mask)",
+      "2 multiply-accumulate units (widening/narrowing)",
+      "1 division unit",
+      "1 permutation/reduction unit (gather, slide, compress, reduce)",
+      "2 load/store units (unit-stride, strided, indexed)",
+      "vsetvli/vsetivli/vsetvl configuration instruction handling",
+      "Mask-agnostic and tail-agnostic modes",
+      "Vector rounding mode (vxrm) support"
+    ]
+  },
+  "asic": {"flavor": "digital", "technology": ["GF22", "TSMC12FFC", "sky130A"]},
+  "fpga": {"toolchain": ["Vivado"], "devices": ["Ultrascale+"]},
+  "dependencies": [
+    {"name": "coralnpu-scalar-core", "type": "core", "description": "Scalar RISC-V core providing instruction issue and register file"},
+    {"name": "coralnpu-lsu", "type": "integration", "description": "Load/store unit for memory access"}
+  ],
+  "test": {
+    "testbenches": ["uvm", "systemverilog"],
+    "status": "upstream_passing",
+    "coverage": "functional",
+    "test_cases": [
+      {"name": "rvv_backend_tb", "description": "UVM testbench with random instruction sequences and Zve32x coverage", "status": "passing"}
+    ]
+  },
+  "documentation": {
+    "upstream": "https://github.com/google-coral/coralnpu/tree/main/hdl/verilog/rvv",
+    "spec": "RISC-V Vector Extension 1.0 Specification"
+  },
+  "artifacts": {
+    "total_rtl_lines": 29597
+  },
+  "categories": {
+    "primary": "cpu",
+    "secondary": ["vector", "coprocessor", "dsp"],
+    "tags": ["rvv", "risc-v", "vector", "zve32x", "zve32f", "simd", "coralnpu", "google", "npu", "machine-learning"]
+  },
+  "trust": {
+    "verification_level": "simulation_passing",
+    "tapeout_count": 0,
+    "fpga_validated": false,
+    "formal_verified": false,
+    "maintained": true,
+    "last_activity": "2026-03-27"
+  },
+  "meta": {
+    "template": {"generator": "manual (gold-standard pass 2026-03-27)", "template_version": "1.0.0", "generated_at": "2026-03-27T20:52:56Z"},
+    "schema": {"version": "1.0.0"}
+  }
+}
