@@ -3,7 +3,7 @@
   "x-version": "1.0.0",
   "name": "coralnpu-rvv-core",
   "version": "0.1.0",
-  "description": "RISC-V Vector (RVV 1.0) execution engine implementing Zve32x integer vector extension with optional Zve32f floating-point support. Configurable VLEN (128/256/512/1024-bit), multi-lane dispatch (4 lanes default), out-of-order execution with reorder buffer. 2 ALU, 2 MUL, 1 DIV, 1 permutation/reduction, 2 LSU, and optional 2 FMA units. From Google CoralNPU project.",
+  "description": "RISC-V Vector (RVV 1.0) execution engine implementing Zve32x integer vector extension with optional Zve32f floating-point support. Configurable VLEN (128/256/512/1024-bit, set via compile-time `define), multi-lane dispatch (4 lanes default), out-of-order execution with reorder buffer. 2 ALU, 2 MUL, 1 DIV, 1 permutation/reduction, 2 LSU, and optional 2 FMA units. From Google CoralNPU project. NOTE: RvvCore is a vector CO-PROCESSOR with no bus port; it attaches directly to a host scalar RISC-V core via custom datapath handshakes (instruction issue, scalar/FP register-file read/write, async writeback, LSU micro-op, vector CSR, and retire), NOT via TL-UL/AXI/APB.",
   "license": "Apache-2.0",
   "maturity": "rtl_verified",
   "target": ["asic", "fpga"],
@@ -21,21 +21,19 @@
   },
   "maintainers": [{"name": "Vyges", "email": "team@vyges.com", "url": "https://vyges.com", "github": "vyges"}],
   "interfaces": [
-    {"type": "instruction", "direction": "input", "port": "instruction", "width": 32, "description": "Multi-lane instruction input (N lanes, default 4) with validity signals."},
-    {"type": "register", "direction": "both", "port": "scalar_reg", "width": 32, "description": "Scalar register file read (2*N ports) and write (N ports) interface."},
-    {"type": "register", "direction": "both", "port": "fp_reg", "width": 32, "description": "Floating-point register read (N ports) and write interface (optional)."},
-    {"type": "lsu", "direction": "both", "port": "lsu", "description": "2 bidirectional LSU connections: vector register index/address, VRF read/write, mask (v0) interface."},
-    {"type": "csr", "direction": "both", "port": "rvv_csr", "description": "Vector CSR interface: vstart, vxrm, vxsat input; config state output."},
-    {"type": "retire", "direction": "output", "port": "rob2rt", "description": "4 ROB-to-retire write ports per lane with write address, data, type."},
-    {"type": "clock", "direction": "input", "port": "clk", "description": "System clock."},
-    {"type": "reset", "direction": "input", "port": "rst_n", "polarity": "active_low", "description": "Asynchronous active-low reset."}
+    {"type": "clock", "direction": "input", "protocol": "generic", "port": "clk", "width": 1, "description": "System clock."},
+    {"type": "reset", "direction": "input", "protocol": "generic", "port": "rstn", "polarity": "active_low", "width": 1, "description": "Active-low reset."},
+    {"type": "custom", "direction": "input", "protocol": "custom", "port": "inst_valid/inst_data/inst_ready", "description": "Instruction issue handshake from host scalar core: N-wide inst_valid + RVVInstruction inst_data in, inst_ready out (NOT a bus)."},
+    {"type": "custom", "direction": "both", "protocol": "custom", "port": "reg_read_valid/reg_read_data/reg_write_valid/reg_write_addr/reg_write_data", "description": "Scalar register file datapath: 2*N read ports (valid+data in), N write ports (valid+addr+data out)."},
+    {"type": "custom", "direction": "both", "protocol": "custom", "port": "freg_read_data/async_frd_valid/async_frd_addr/async_frd_data/async_frd_ready", "description": "Floating-point scalar register datapath (optional Zve32f): N freg read data in, async FP writeback handshake."},
+    {"type": "custom", "direction": "both", "protocol": "custom", "port": "async_rd_valid/async_rd_addr/async_rd_data/async_rd_ready", "description": "Asynchronous scalar register writeback handshake (valid/addr/data out, ready in)."},
+    {"type": "custom", "direction": "both", "protocol": "custom", "port": "uop_lsu_*_rvv2lsu/uop_lsu_*_lsu2rvv", "description": "Load/store unit micro-op handshake (NUM_LSU lanes): rvv2lsu request (index/VRF/v0-mask) and lsu2rvv response, with ready/valid both directions. Not a memory bus."},
+    {"type": "custom", "direction": "both", "protocol": "custom", "port": "vstart/vxrm/vxsat/frm/vcsr_valid/vector_csr/vcsr_ready/config_state_valid/config_state", "description": "Vector CSR datapath: vstart/vxrm/vxsat/frm inputs; vector_csr and config_state outputs with valid/ready handshake."},
+    {"type": "custom", "direction": "output", "protocol": "custom", "port": "rd_rob2rt_o/rd_valid_rob2rt_o/rvv_idle/queue_capacity/trap_valid_o/trap_data_o/wr_vxsat_valid_o/wr_vxsat_o", "description": "Retire/status outputs: NUM_RT_UOP ROB-to-retire write ports, rvv_idle, queue_capacity, trap signaling, and vxsat writeback."}
   ],
   "parameters": [
-    {"name": "N", "type": "int", "default": 4, "description": "Number of instruction lanes (scalar core issue width)."},
-    {"name": "CMD_BUFFER_MAX_CAPACITY", "type": "int", "default": 16, "description": "Command buffer maximum capacity."},
-    {"name": "VLEN", "type": "enum", "default": "VLEN_128", "description": "Vector register length: VLEN_128, VLEN_256, VLEN_512, VLEN_1024."},
-    {"name": "ZVE32F_ON", "type": "define", "default": "disabled", "description": "Enable Zve32f floating-point vector extension (compile-time)."},
-    {"name": "DISPATCH3", "type": "define", "default": "enabled", "description": "3-decode/2-dispatch pipeline (vs DISPATCH2 alternative)."}
+    {"name": "N", "type": "int", "default": 4, "description": "Number of instruction lanes (host scalar core issue width)."},
+    {"name": "CMD_BUFFER_MAX_CAPACITY", "type": "int", "default": 16, "description": "Command buffer maximum capacity."}
   ],
   "performance": {
     "isa": "RISC-V Vector Extension 1.0",
